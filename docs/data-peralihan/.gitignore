@@ -1,0 +1,11 @@
+# Data mentah pengukuran waktu peralihan (MKKL1030).
+#
+# Yang disimpan di repo hanya 4 berkas rujukan yang angkanya dilaporkan di
+# docs/waktu-peralihan.md. Setiap kali skrip dijalankan ulang ia menulis berkas
+# baru dengan cap waktu berbeda — biarkan yang baru itu di luar repo supaya
+# riwayat commit tidak terisi data yang sama berulang kali.
+peralihan-p*.csv
+!peralihan-p1-1792279545.csv
+!peralihan-p2-1792279579.csv
+!peralihan-p3-1792279613.csv
+!peralihan-p4-1792279647.csv
