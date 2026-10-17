@@ -77,6 +77,22 @@ bash src/tests/uji_kegagalan.sh
 Hasil setiap skenario beserta penjelasannya ada di
 [`docs/hasil-uji-kegagalan.md`](docs/hasil-uji-kegagalan.md).
 
+### 6. Mengukur waktu peralihan saat satu node dimatikan
+
+```bash
+python3 src/tests/uji_waktu_peralihan.py --ulang 4
+```
+
+Menekan layanan terus-menerus sambil mematikan app1, lalu mengukur berapa
+permintaan yang gagal dan berapa lama app1 kembali masuk perputaran. Hasil dan
+penjelasannya di [`docs/waktu-peralihan.md`](docs/waktu-peralihan.md).
+
+### 7. Seluruh pengujian sekaligus
+
+```bash
+bash src/tests/jalankan-semua.sh
+```
+
 ## Struktur Repository
 
 ```
@@ -106,6 +122,7 @@ spt_2026_kelompok1_load_balancer_terdistribusi/
 | `docs/rencana-proyek.md` | Rencana proyek, target UTS dan UAS, pembagian kerja per minggu, risiko |
 | `docs/arsitektur.md` | Penjelasan komponen, alur permintaan, dan keputusan teknis |
 | `docs/hasil-uji-kegagalan.md` | Catatan hasil setiap skenario pengujian kegagalan |
+| `docs/waktu-peralihan.md` | Waktu peralihan terukur saat satu app server dimatikan (3 percobaan) |
 | `docs/diagrams/` | Diagram arsitektur dan alur permintaan |
 
 ## Pemenuhan Ketentuan Mata Kuliah
@@ -136,5 +153,9 @@ perangkat sungguhan (Docker Desktop, empat container), dengan bukti berupa
 angka — bukan pembacaan konfigurasi.
 
 Untuk UAS yang masih perlu ditambahkan: pengujian **antar-mesin** (container
-dipecah ke dua host agar latensi dan throughput mewakili jaringan sungguhan),
-serta pencatatan waktu peralihan saat satu node dimatikan.
+dipecah ke dua host agar latensi dan throughput mewakili jaringan sungguhan).
+
+Waktu peralihan saat satu node dimatikan **sudah terukur** —
+lihat [`docs/waktu-peralihan.md`](docs/waktu-peralihan.md): 4 percobaan,
+0 dari 5.437 permintaan gagal, node mati kembali masuk perputaran rata-rata
+2,74 detik setelah dinyalakan.
