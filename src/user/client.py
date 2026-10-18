@@ -29,6 +29,31 @@ PERINTAHAN DAYA (matikan / restart / kunci):
 """
 from __future__ import annotations
 
+import sys
+
+
+def _amankan_layar() -> None:
+    """Cegah program berhenti mendadak di Windows saat menampilkan simbol.
+
+    Kenapa ini ada:
+        Terminal Windows (cmd.exe) memakai pengodean lama (cp1252/cp437) yang
+        TIDAK mengenal karakter seperti ⚡ ✓ ✗ 💬 → dan garis kotak ┌ │ └ ─.
+        Tanpa pengaman ini, print("  ⚡ PERINTAH...") langsung berhenti dengan
+        UnicodeEncodeError — dan itu justru terjadi di laptop anggota, bukan
+        di Mac tempat programnya dibuat.
+
+        Kalau karakter tidak bisa ditampilkan, ia diganti tanda tanya. Program
+        tetap jalan; yang hilang cuma hiasannya.
+    """
+    for aliran in (sys.stdout, sys.stderr):
+        try:
+            aliran.reconfigure(errors="replace")
+        except Exception:
+            pass          # Python lama atau aliran tidak bisa diubah — tidak fatal
+
+
+_amankan_layar()
+
 import argparse
 import json
 import pathlib
