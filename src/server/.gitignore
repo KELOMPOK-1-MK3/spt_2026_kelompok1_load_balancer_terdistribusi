@@ -1,0 +1,18 @@
+# Jangan ikutkan hasil pengujian dan berkas sistem.
+
+# Basis data hasil uji (dibuat ulang tiap kali server dijalankan)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+
+# Keluaran uji
+data/keluaran-*.txt
+
+# Berkas sistem
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+
+# Berkas sementara
+*.log
