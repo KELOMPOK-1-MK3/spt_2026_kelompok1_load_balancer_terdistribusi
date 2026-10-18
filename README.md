@@ -93,6 +93,16 @@ penjelasannya di [`docs/waktu-peralihan.md`](docs/waktu-peralihan.md).
 bash src/tests/jalankan-semua.sh
 ```
 
+### 8. Aplikasi client di browser
+
+```bash
+docker compose up --build -d
+```
+
+Buka **http://localhost:8080/klien/** — halaman yang memantau layanan dan
+memperlihatkan permintaan berpindah antara app1 dan app2 setiap 1 detik.
+Petunjuk lengkap: [`src/client/README.md`](src/client/README.md).
+
 ## Struktur Repository
 
 ```
@@ -103,6 +113,9 @@ spt_2026_kelompok1_load_balancer_terdistribusi/
 │   ├── rencana-proyek.md
 │   ├── arsitektur.md
 │   ├── hasil-uji-kegagalan.md
+│   ├── waktu-peralihan.md
+│   ├── data-peralihan/      # data mentah CSV
+│   ├── bukti/               # tangkapan layar aplikasi client
 │   ├── diagrams/
 │   └── MKKL1030-Load-Balancer-Replicated-App.docx
 ├── src/
@@ -110,6 +123,9 @@ spt_2026_kelompok1_load_balancer_terdistribusi/
 │   │   ├── app.py
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
+│   ├── client/          # aplikasi client (HTML + JavaScript)
+│   │   ├── index.html
+│   │   └── README.md
 │   └── tests/           # skrip pengujian beban dan kegagalan
 └── nginx/
     └── nginx.conf       # pengaturan upstream + health check
@@ -122,12 +138,15 @@ spt_2026_kelompok1_load_balancer_terdistribusi/
 | `docs/rencana-proyek.md` | Rencana proyek, target UTS dan UAS, pembagian kerja per minggu, risiko |
 | `docs/arsitektur.md` | Penjelasan komponen, alur permintaan, dan keputusan teknis |
 | `docs/hasil-uji-kegagalan.md` | Catatan hasil setiap skenario pengujian kegagalan |
-| `docs/waktu-peralihan.md` | Waktu peralihan terukur saat satu app server dimatikan (3 percobaan) |
+| `docs/waktu-peralihan.md` | Waktu peralihan terukur saat satu app server dimatikan (4 percobaan) |
+| `docs/bukti/` | Tangkapan layar aplikasi client (keadaan normal & saat app1 mati) |
+| `src/client/README.md` | Cara menjalankan dan menguji aplikasi client |
 | `docs/diagrams/` | Diagram arsitektur dan alur permintaan |
 
 ## Pemenuhan Ketentuan Mata Kuliah
 
 - **Minimal dua proses terpisah**: empat container yang saling berkomunikasi melalui jaringan Docker.
+- **Aplikasi client**: halaman web di `src/client/`, dilayani pada satu alamat bersama load balancer.
 - **Mekanisme komunikasi**: HTTP antar-container dan protokol Redis untuk penyimpanan status bersama.
 - **Isu terdistribusi yang ditangani**: penyeimbangan beban, replikasi dan konsistensi status, serta toleransi kegagalan.
 - **Skenario uji kegagalan**: mematikan app server saat beban berjalan dan memulai ulang penyimpanan bersama.

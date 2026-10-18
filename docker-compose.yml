@@ -57,6 +57,9 @@ services:
       - "8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Aplikasi client dilayani Nginx supaya berada di alamat yang sama
+      # dengan load balancer (tidak ada permintaan lintas-asal).
+      - ./src/client:/usr/share/nginx/html/klien:ro
     networks: [backend]
     depends_on:
       - app1
