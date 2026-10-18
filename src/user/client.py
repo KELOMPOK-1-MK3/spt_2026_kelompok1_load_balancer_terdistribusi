@@ -75,6 +75,67 @@ IZINKAN_DAYA_DI_MAC = False     # diisi dari --izinkan-daya
 # pun — setiap orang tinggal mengubah isi nama.txt di laptopnya sendiri.
 BERKAS_NAMA = pathlib.Path(__file__).resolve().parent / "nama.txt"
 
+# Berkas berisi alamat server. Anggota tidak perlu mengetik IP di terminal —
+# cukup ubah isi berkas ini kalau alamat server berubah.
+BERKAS_SERVER = pathlib.Path(__file__).resolve().parent / "server.txt"
+
+PORT_BAWAAN = 5000
+
+
+def baca_alamat(dari_argumen: str | None, port_argumen: int | None) -> tuple[str, int, str]:
+    """Tentukan alamat server.
+
+    Mengembalikan (host, port, sumber). Sumber ditampilkan di layar supaya
+    jelas alamatnya datang dari mana kalau ternyata salah.
+
+    Urutan: --server di terminal, lalu server.txt, lalu tanya sekali.
+    """
+    if dari_argumen:
+        return dari_argumen.strip(), (port_argumen or PORT_BAWAAN), "perintah --server"
+
+    # server.txt isinya boleh "192.168.1.7" saja, atau "192.168.1.7:5000".
+    if BERKAS_SERVER.exists():
+        isi = ""
+        for baris in BERKAS_SERVER.read_text(encoding="utf-8").splitlines():
+            baris = baris.strip()
+            if baris and not baris.startswith("#"):
+                isi = baris
+                break
+        if isi:
+            host, _, port_teks = isi.partition(":")
+            host = host.strip()
+            try:
+                port = int(port_teks.strip()) if port_teks.strip() else PORT_BAWAAN
+            except ValueError:
+                port = PORT_BAWAAN
+            if host:
+                return host, (port_argumen or port), BERKAS_SERVER.name.split("/")[-1]
+
+    # Belum ada server.txt — tanyakan sekali, lalu simpan supaya tidak diulang.
+    print()
+    print("  Alamat laptop server belum diatur.")
+    print("  Ini alamat yang DICETAK server saat dijalankan, misalnya 192.168.1.7")
+    print("  (kalau server ada di laptop ini juga, isi: 127.0.0.1)")
+    print()
+    try:
+        jawab = input("  Alamat server: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        jawab = ""
+    if not jawab:
+        jawab = "127.0.0.1"
+    host, _, port_teks = jawab.partition(":")
+    host = host.strip() or "127.0.0.1"
+    try:
+        port = int(port_teks.strip()) if port_teks.strip() else PORT_BAWAAN
+    except ValueError:
+        port = PORT_BAWAAN
+    try:
+        BERKAS_SERVER.write_text(f"{host}:{port}\n", encoding="utf-8")
+        sumber = f"{BERKAS_SERVER.name} (baru disimpan)"
+    except Exception as e:
+        sumber = f"jawaban langsung (gagal menyimpan: {e})"
+    return host, (port_argumen or port), sumber
+
 
 def baca_nama(dari_argumen: str | None) -> tuple[str, str]:
     """Tentukan nama laptop ini.
@@ -373,8 +434,9 @@ def penampil(p: Pengguna) -> None:
 # ---------------------------------------------------------------------- utama
 def utama() -> int:
     q = argparse.ArgumentParser(description="Pengguna chat — MK Sistem Paralel")
-    q.add_argument("--server", required=True, help="IP laptop server, mis. 192.168.1.7")
-    q.add_argument("--port", type=int, default=5000, help="port server (bawaan 5000)")
+    q.add_argument("--server", help="IP laptop server, mis. 192.168.1.7 "
+                                    "(bawaan: isi server.txt)")
+    q.add_argument("--port", type=int, help=f"port server (bawaan {PORT_BAWAAN})")
     q.add_argument("--nama", help="nama laptop ini, sekali jalan saja "
                                   "(bawaan: isi nama.txt)")
     q.add_argument("--tunggu", action="store_true",
@@ -388,7 +450,8 @@ def utama() -> int:
     IZINKAN_DAYA_DI_MAC = a.izinkan_daya
 
     nama, sumber = baca_nama(a.nama)
-    p = Pengguna(a.server, a.port, nama)
+    host, port, sumber_alamat = baca_alamat(a.server, a.port)
+    p = Pengguna(host, port, nama)
 
     print("=" * 64)
     print("  MK SISTEM PARALEL DAN TERDISTRIBUSI — PENGGUNA")
@@ -408,7 +471,7 @@ def utama() -> int:
             print("             (nama.txt belum ada — pakai --nama atau "
                   "jalankan tanpa --nama untuk mengisinya.)")
     print(f"  Sistem   : {p.sistem}")
-    print(f"  Server   : {a.server}:{a.port}")
+    print(f"  Server   : {host}:{port}   (dari: {sumber_alamat})")
     print("=" * 64, flush=True)
 
     if not p.sambung():

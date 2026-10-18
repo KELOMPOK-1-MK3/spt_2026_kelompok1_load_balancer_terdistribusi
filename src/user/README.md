@@ -44,20 +44,37 @@ python3 client.py --server 127.0.0.1 --nama "PC04 (Deski)"
 
 ---
 
+## Alamat server
+
+Alamat diambil dari berkas **`server.txt`**:
+
+```
+192.168.1.7:5000
+```
+
+Boleh ditulis alamatnya saja (`192.168.1.7`) — port-nya dianggap `5000`.
+Baris yang diawali `#` diabaikan.
+
+Kalau `server.txt` belum ada, program akan **menanyakan sekali** lalu
+menyimpannya.
+
 ## Cara menjalankan (satu terminal)
 
 ```bash
 cd ~/Documents/TUGAS\ 3\ MK/MK\ SISTEM\ PARALEL/user
-python3 client.py --server 192.168.1.7
+python3 client.py
 ```
 
-Ganti `192.168.1.7` dengan alamat yang **dicetak oleh server** saat dijalankan.
+**Tidak perlu mengetik IP** — sudah dibaca dari `server.txt`.
 
-Contoh kalau server di laptop yang sama (buat uji coba):
+Ganti isi `server.txt` kalau alamat server berubah, atau timpa sekali jalan:
 
 ```bash
 python3 client.py --server 127.0.0.1
 ```
+
+Contoh kalau server di laptop yang sama (buat uji coba): isi `server.txt`
+dengan `127.0.0.1`.
 
 ## Cara mengetik pesan
 
@@ -90,7 +107,7 @@ python3 client.py --server 127.0.0.1 --tunggu
 
 | Pilihan | Artinya | Bawaan |
 |---|---|---|
-| `--server IP` | Alamat laptop server | **wajib** |
+| `--server IP` | Alamat laptop server | isi `server.txt` |
 | `--port N` | Port server | `5000` |
 | `--nama NAMA` | Ganti nama sekali jalan saja | isi `nama.txt` |
 | `--tunggu` | Hanya menerima, tidak usah mengetik | mati |
@@ -150,6 +167,8 @@ Kalau tidak, perintahnya akan gagal dengan pesan "Access is denied".
 ```
 user/
 ├── client.py     program utamanya
+├── nama.txt      nama laptop ini
+├── server.txt    alamat laptop server
 └── README.md
 ```
 
@@ -166,6 +185,11 @@ python3 --version
 
 Kalau belum ada, unduh dari [python.org](https://www.python.org/downloads/).
 **Windows:** saat memasang, centang **"Add Python to PATH"**.
+
+> **Catatan untuk Windows.** Terminal Windows memakai pengodean lama yang tidak
+> mengenal karakter ⚡ ✓ ✗ 💬 → dan garis kotak. Program ini sudah mengamankan
+> diri (`errors="replace"`), jadi simbol yang tidak bisa ditampilkan hanya
+> diganti tanda tanya — program tetap jalan.
 
 ---
 
