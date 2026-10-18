@@ -1,180 +1,153 @@
-# Load Balancer dan Replicated App — Sistem Tiga Container dengan Nginx, Flask, dan Redis
+# Sistem Chat dan Kendali Terpusat Antar Laptop
 
 **Mata kuliah:** Sistem Paralel dan Terdistribusi (MKKL1030) · Semester 7
 **Program Studi Ilmu Komputer — Fakultas Sains, Teknologi dan Ilmu Kesehatan**
 **Universitas Bina Bangsa Getsempena**
 **Dosen Pengampu:** Ahmad Mujahid Abdurrahman, S.Kom, M.T.
 
-Purwarupa sistem terdistribusi berisi empat container Docker: Nginx sebagai load balancer, dua app server Flask yang identik, dan Redis sebagai penyimpanan status bersama. Klien hanya mengenal satu alamat, sementara Nginx membagi permintaan ke kedua app server dan memeriksa kesehatannya secara berkala. Sistem ini diuji dengan mematikan salah satu app server saat permintaan sedang berjalan, memberi beban tinggi, dan memulai ulang penyimpanan bersama, untuk membuktikan toleransi kegagalan serta konsistensi data.
+Enam laptop yang saling terhubung dalam satu jaringan lokal: **satu laptop
+menjadi server**, **lima laptop lain menjadi pengguna**. Lewat terminal, tiap
+laptop dapat mengirim pesan ke semua orang atau ke satu orang saja. Server juga
+dapat mengirim perintah ke laptop tertentu (menampilkan pesan, mengunci layar,
+menyalakan ulang, mematikan) lewat dashboard web.
+
+Seluruh komunikasi memakai **socket TCP** dengan pesan berbentuk satu baris JSON.
+Tidak ada pustaka tambahan — hanya modul bawaan Python.
 
 ## Anggota Kelompok
 
 | No | Nama | NIM | Peran |
 |---|---|---|---|
-| 1 | Paris Mursidan Aufal | 23210125 | Aplikasi server Flask dan basis data penyimpanan hasil pengolahan |
-| 2 | Yogi Prasetya Sadewa | 23210060 | Ketua kelompok; berkas Docker Compose, konfigurasi Nginx, dan skenario pengujian kegagalan |
-| 3 | M. Sidiq Prasetio | 23210075 | Aplikasi client yang menghubungi kedua app server lewat load balancer |
-| 4 | Deski Taiza | 23210003 | Konfigurasi Redis sebagai penyimpanan status bersama dan pengujian ketahanan data |
-| 5 | Wira | 23210045 | Pengujian beban dan pencatatan hasil pengalihan trafik |
-| 6 | T. Zain Wardana | 23210001 | Skrip pengujian kegagalan dan pengolahan hasil menjadi tabel laporan |
+| 1 | Paris Mursidan Aufal | 23210125 | Basis data pesan dan perintah di sisi server |
+| 2 | Yogi Prasetya Sadewa | 23210060 | Ketua kelompok; server socket, dashboard web, dan skenario pengujian |
+| 3 | M. Sidiq Prasetio | 23210075 | Aplikasi pengguna yang menyambung ke server |
+| 4 | Deski Taiza | 23210003 | Riwayat pesan dan pengujian ketahanan data |
+| 5 | Wira | 23210045 | Pengujian beberapa pengguna dan pencatatan hasil |
+| 6 | T. Zain Wardana | 23210001 | Skrip pengujian dan pengolahan hasil menjadi tabel laporan |
 
-> Kelompok berjumlah 6 orang; setiap anggota mengerjakan satu bagian di tiap mata
-> kuliah dan melakukan commit dari akun GitHub masing-masing.
+> Kelompok berjumlah 6 orang; setiap anggota mengerjakan satu bagian dan
+> melakukan commit dari akun GitHub masing-masing.
 
-## Rencana Proyek
+## Struktur Repositori
 
-- Google Docs (dibagikan kepada dosen dengan akses komentar) — tautan: [MKKL1030 — Load Balancer dan Replicated App](https://docs.google.com/document/d/11KX6rlOrZWmQWi_vplcNos2axfwvxbLx_SRCl610EkU/edit)
-- Salinan di repository: [`docs/rencana-proyek.md`](docs/rencana-proyek.md)
+```
+├── PROTOKOL.md              bentuk pesan yang dipertukarkan server & pengguna
+├── docs/
+│   ├── arsitektur.md        komponen, keputusan teknis, alur satu pesan
+│   ├── pengujian.md         apa yang sudah diuji, hasilnya, cara mengulanginya
+│   ├── diagrams/            gambar arsitektur, ERD, alur pesan
+│   └── bukti/               tangkapan layar dashboard dan animasi
+└── src/
+    ├── server/              server socket + dashboard web
+    │   ├── server.py
+    │   ├── static/index.html
+    │   └── uji-*.py|sh      skrip pengujian
+    └── user/                program yang dijalankan tiap anggota
+        └── client.py
+```
 
 ## Cara Menjalankan
 
 ### Kebutuhan
 
-- Docker dan Docker Compose
-- Perkakas uji beban (opsional): hey atau ApacheBench
+- Python 3.10 atau lebih baru
+- Semua laptop berada di **jaringan WiFi yang sama**
 
-### 1. Menjalankan seluruh sistem
+Tidak ada `pip install`. Kedua program hanya memakai modul bawaan.
 
-```bash
-docker compose up --build -d
-docker compose ps
-```
-
-### 2. Menguji layanan melalui load balancer
+### 1. Nyalakan server (di laptop ketua)
 
 ```bash
-# Perhatikan field "server" pada respons: bergantian antara app1 dan app2
-curl -s http://localhost:8080/ | jq
-# Header pembukti node mana yang melayani:
-curl -s -D- -o /dev/null http://localhost:8080/ | grep -i x-served-by
+cd src/server
+python3 server.py
 ```
 
-> Port 8080 dipakai pada *host* karena port 80 sering sudah ditempati layanan
-> lain. Di dalam jaringan Docker, Nginx tetap mendengarkan port 80.
+Server akan mencetak alamatnya, misalnya:
 
-### 3. Menguji kegagalan satu app server
+```
+  Menunggu klien di port TCP   : 5000
+  Dashboard web                : http://localhost:8081
+  Alamat yang dipakai klien (berikan ke anggota):
+      192.168.1.7:5000
+```
+
+### 2. Jalankan di tiap laptop anggota
 
 ```bash
-docker compose stop app1
-curl -s http://localhost:8080/ | jq   # harus tetap dijawab app2
-docker compose start app1
+cd src/user
+python3 client.py --server 192.168.1.7
 ```
 
-### 4. Menguji beban dan ketahanan status
+Ganti `192.168.1.7` dengan alamat yang dicetak server.
 
-```bash
-hey -n 1000 -c 50 http://localhost:8080/
-docker compose restart redis
-curl -s http://localhost:8080/state | jq
-```
+Nama laptop diambil dari berkas `src/user/nama.txt`. Tiap anggota mengubah
+isinya sesuai namanya, misalnya `PC04 (Deski)`. Kalau berkasnya belum ada,
+program akan menanyakannya sekali lalu menyimpannya.
 
-### 5. Seluruh skenario uji kegagalan sekaligus
+### 3. Buka dashboard
 
-```bash
-bash src/tests/uji_kegagalan.sh
-```
+**http://localhost:8081** — di sini terlihat semua laptop yang tersambung,
+riwayat pesan dan perintah, serta tombol untuk mengirim pesan atau perintah.
 
-Hasil setiap skenario beserta penjelasannya ada di
-[`docs/hasil-uji-kegagalan.md`](docs/hasil-uji-kegagalan.md).
-
-### 6. Mengukur waktu peralihan saat satu node dimatikan
-
-```bash
-python3 src/tests/uji_waktu_peralihan.py --ulang 4
-```
-
-Menekan layanan terus-menerus sambil mematikan app1, lalu mengukur berapa
-permintaan yang gagal dan berapa lama app1 kembali masuk perputaran. Hasil dan
-penjelasannya di [`docs/waktu-peralihan.md`](docs/waktu-peralihan.md).
-
-### 7. Seluruh pengujian sekaligus
-
-```bash
-bash src/tests/jalankan-semua.sh
-```
-
-### 8. Aplikasi client di browser
-
-```bash
-docker compose up --build -d
-```
-
-Buka **http://localhost:8080/klien/** — halaman yang memantau layanan dan
-memperlihatkan permintaan berpindah antara app1 dan app2 setiap 1 detik.
-Petunjuk lengkap: [`src/client/README.md`](src/client/README.md).
-
-## Struktur Repository
+## Cara Memakai Terminal Pengguna
 
 ```
-spt_2026_kelompok1_load_balancer_terdistribusi/
-├── README.md
-├── docker-compose.yml
-├── docs/
-│   ├── rencana-proyek.md
-│   ├── arsitektur.md
-│   ├── hasil-uji-kegagalan.md
-│   ├── waktu-peralihan.md
-│   ├── data-peralihan/      # data mentah CSV
-│   ├── bukti/               # tangkapan layar aplikasi client
-│   ├── diagrams/
-│   └── MKKL1030-Load-Balancer-Replicated-App.docx
-├── src/
-│   ├── app/             # aplikasi Flask (dipakai kedua container)
-│   │   ├── app.py
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── client/          # aplikasi client (HTML + JavaScript)
-│   │   ├── index.html
-│   │   └── README.md
-│   └── tests/           # skrip pengujian beban dan kegagalan
-└── nginx/
-    └── nginx.conf       # pengaturan upstream + health check
+halo semua              → kirim ke semua orang
+/ke PC04 (Deski) halo   → kirim ke satu orang saja
+/online                 → lihat siapa saja yang aktif
+/keluar                 → keluar
 ```
 
-## Dokumentasi
+## Yang Sudah Terbukti
 
-| Berkas | Isi |
+| Kemampuan | Status |
 |---|---|
-| `docs/rencana-proyek.md` | Rencana proyek, target UTS dan UAS, pembagian kerja per minggu, risiko |
-| `docs/arsitektur.md` | Penjelasan komponen, alur permintaan, dan keputusan teknis |
-| `docs/hasil-uji-kegagalan.md` | Catatan hasil setiap skenario pengujian kegagalan |
-| `docs/waktu-peralihan.md` | Waktu peralihan terukur saat satu app server dimatikan (4 percobaan) |
-| `docs/bukti/` | Tangkapan layar aplikasi client (keadaan normal & saat app1 mati) |
-| `src/client/README.md` | Cara menjalankan dan menguji aplikasi client |
-| `docs/diagrams/` | Diagram arsitektur dan alur permintaan |
+| Banyak pengguna tersambung bersamaan (satu thread per pengguna) | ✅ |
+| Pesan siaran ke semua orang, tanpa gema ke pengirim | ✅ |
+| Pesan pribadi ke satu orang (tidak bocor ke yang lain) | ✅ |
+| Nama kembar ditolak | ✅ |
+| Pengguna putus terdeteksi & tercatat | ✅ |
+| Perintah hanya dijalankan laptop yang dituju | ✅ |
+| Perintah daya **ditolak** di macOS (lihat catatan di bawah) | ✅ |
+| Dashboard: daftar laptop, kirim pesan, riwayat, ekspor CSV | ✅ |
+| Dashboard muat satu layar tanpa menggulir | ✅ |
 
-## Pemenuhan Ketentuan Mata Kuliah
+Rincian lengkap dan cara mengulanginya: [`docs/pengujian.md`](docs/pengujian.md)
 
-- **Minimal dua proses terpisah**: empat container yang saling berkomunikasi melalui jaringan Docker.
-- **Aplikasi client**: halaman web di `src/client/`, dilayani pada satu alamat bersama load balancer.
-- **Mekanisme komunikasi**: HTTP antar-container dan protokol Redis untuk penyimpanan status bersama.
-- **Isu terdistribusi yang ditangani**: penyeimbangan beban, replikasi dan konsistensi status, serta toleransi kegagalan.
-- **Skenario uji kegagalan**: mematikan app server saat beban berjalan dan memulai ulang penyimpanan bersama.
+## Pengaman Penting
 
-## Aturan Kerja Kelompok
+Perintah **matikan, restart, dan kunci ditolak di macOS** secara bawaan.
 
-- Commit dilakukan dari akun GitHub masing-masing anggota, bukan satu akun untuk seluruh kelompok.
-- Pesan commit deskriptif dan menunjukkan kemajuan; dikerjakan minimal sekali per minggu per anggota.
-- Pekerjaan bersama menggunakan branch dan pull request; pembagian tugas dicatat pada Issues.
-- Kredensial, token, dan berkas `.env` tidak boleh masuk repository.
+Ini disengaja: Mac ketua dipakai sebagai server *sekaligus* komputer kerja.
+Tanpa pengaman ini, satu perintah yang salah kirim saat presentasi bisa
+mematikan komputer yang sedang dipakai presentasi. Pengamannya ada **di dalam
+kode**, bukan hanya dihindari oleh skrip uji — jadi perintah daya tetap ditolak
+walau dikirim dari mana pun.
 
-## Status
+Di Windows, perintah daya butuh terminal **Run as Administrator**.
 
-| Tahap | Target | Status |
-|---|---|---|
-| Pertemuan 2 | Rencana proyek, repository, undangan kolaborator | Selesai |
-| Pertemuan 8 (UTS) | Seluruh container berjalan dan klien mengakses layanan melalui load balancer | Selesai |
-| Pertemuan 16 (UAS) | Sistem berjalan penuh dan dapat dijalankan ulang dari satu berkas Compose | Sebagian |
+## Yang Belum Diuji
 
-Pertemuan 8 sudah terpenuhi dan **terukur**: enam skenario pada
-[`docs/hasil-uji-kegagalan.md`](docs/hasil-uji-kegagalan.md) dijalankan pada
-perangkat sungguhan (Docker Desktop, empat container), dengan bukti berupa
-angka — bukan pembacaan konfigurasi.
+Dicatat terbuka, bukan disembunyikan:
 
-Untuk UAS yang masih perlu ditambahkan: pengujian **antar-mesin** (container
-dipecah ke dua host agar latensi dan throughput mewakili jaringan sungguhan).
+1. **Enam laptop sungguhan yang terpisah.** Pengujian masih di satu mesin.
+2. **Perintah daya di Windows.** Baru dibuktikan bahwa perintahnya *ditolak* di
+   macOS.
+3. **WiFi kampus.** Perlu diuji dengan dua laptop lebih dahulu sebelum hari
+   presentasi, untuk memastikan WiFi tidak memisahkan antar-laptop.
+4. **Beban tinggi.** Belum diukur berapa pengguna yang bisa dilayani bersamaan.
+5. **Sambung ulang otomatis.** Kalau WiFi sempat putus, program pengguna harus
+   dijalankan ulang.
 
-Waktu peralihan saat satu node dimatikan **sudah terukur** —
-lihat [`docs/waktu-peralihan.md`](docs/waktu-peralihan.md): 4 percobaan,
-0 dari 5.437 permintaan gagal, node mati kembali masuk perputaran rata-rata
-2,74 detik setelah dinyalakan.
+## Dokumen Terkait
+
+- [`PROTOKOL.md`](PROTOKOL.md) — bentuk pesan yang dipertukarkan
+- [`docs/arsitektur.md`](docs/arsitektur.md) — komponen dan keputusan teknis
+- [`docs/pengujian.md`](docs/pengujian.md) — hasil pengujian
+- [`src/server/README.md`](src/server/README.md) — penjelasan rinci sisi server
+- [`src/user/README.md`](src/user/README.md) — penjelasan rinci sisi pengguna
+
+---
+
+> **Catatan nama repositori.** Repositori ini masih memakai nama tema
+> sebelumnya. Isinya sudah sepenuhnya memakai tema chat dan kendali terpusat.
