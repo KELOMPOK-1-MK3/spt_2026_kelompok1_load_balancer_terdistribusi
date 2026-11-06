@@ -1,0 +1,16 @@
+# Basis data hasil uji (dibuat ulang tiap kali server dijalankan)
+*.db
+*.db-journal
+*.db-wal
+
+# Berkas sistem
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+
+# Berkas sementara
+*.log
+
+# Keluaran uji
+src/server/data/keluaran-*.txt
