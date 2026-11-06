@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Server — MK Sistem Paralel</title>
+<style>
+  /* ===================================================================
+     Sistem warna.
+     Dua warna sinyal, masing-masing PUNYA TUGAS — bukan hiasan:
+        amber = pesan yang PERGI (dari pengirim ke server)
+        teal  = pesan yang TIBA  (dari server ke penerima)
+     Sisanya grafit netral. Tidak ada gradien biru-ungu.
+     =================================================================== */
+  :root{
+    --kanvas:#0b0c0e;
+    --panel:#121417;
+    --panel-naik:#171a1e;
+    --garis:rgba(255,255,255,.07);
+    --garis-kuat:rgba(255,255,255,.12);
+    --tinta:#e8eaed;
+    --tinta-2:#a8b0b8;
+    --tinta-3:#6d757e;
+
+    --kirim:#e8a33d;          /* amber — pesan pergi */
+    --kirim-redup:rgba(232,163,61,.14);
+    --tiba:#3fb6c4;           /* teal — pesan tiba */
+    --tiba-redup:rgba(63,182,196,.14);
+    --server:#e8eaed;
+    --hidup:#57a35f;
+    --bahaya:#e5534b;
+    --tunggu:#c9a227;
+
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--kanvas);color:var(--tinta);
+    font:13.5px/1.45 var(--ui);
+    display:flex;flex-direction:column;gap:9px;
+    padding:10px 12px;overflow:hidden;      /* FR-A6: halaman tidak menggulir */
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;
+        font-feature-settings:"zero" 1}
+
+  /* ---------------------------------------------------------- kepala */
+  header{display:flex;align-items:center;gap:11px;flex:0 0 auto}
+  .merk{display:flex;align-items:baseline;gap:9px;min-width:0}
+  h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowrap}
+  .sub{color:var(--tinta-3);font-size:11px;white-space:nowrap;
+       overflow:hidden;text-overflow:ellipsis}
+  .kanan{margin-left:auto;display:flex;align-items:center;gap:7px;flex:0 0 auto}
+
+  .denyut{width:7px;height:7px;border-radius:50%;background:var(--hidup);
+          box-shadow:0 0 0 0 rgba(87,163,95,.5);animation:denyut 2.4s infinite}
+  @keyframes denyut{
+    0%{box-shadow:0 0 0 0 rgba(87,163,95,.45)}
+    70%{box-shadow:0 0 0 7px rgba(87,163,95,0)}
+    100%{box-shadow:0 0 0 0 rgba(87,163,95,0)}
+  }
+  .jam{color:var(--tinta-3);font-size:11px}
+
+  /* --------------------------------------------------------- tombol */
+  button{
+    background:rgba(255,255,255,.03);color:var(--tinta);
+    border:1px solid var(--garis-kuat);border-radius:6px;
+    padding:5px 10px;font:500 12px var(--ui);cursor:pointer;
+    transition:background .12s,border-color .12s,transform .06s;
+  }
+  button:hover:not(:disabled){background:rgba(255,255,255,.07)}
+  button:active:not(:disabled){transform:translateY(1px)}
+  button:disabled{opacity:.32;cursor:not-allowed}
+  button.bahaya{color:#ffb9b4;border-color:rgba(229,83,75,.42)}
+  button.bahaya:hover:not(:disabled){background:rgba(229,83,75,.15)}
+  button.tombol-utama{color:#ffdca8;border-color:rgba(232,163,61,.45);
+               background:rgba(232,163,61,.09)}
+  button.tombol-utama:hover:not(:disabled){background:rgba(232,163,61,.18)}
+  button.lega{padding:7px 14px}
+  button:focus-visible{outline:2px solid var(--tiba);outline-offset:1px}
+
+  /* ---------------------------------------------------------- panel */
+  .panel{
+    background:var(--panel);border:1px solid var(--garis);border-radius:9px;
+    display:flex;flex-direction:column;min-height:0;position:relative;
+  }
+  .panel::before{          /* garis rambut atas — pemisah halus, bukan kotak */
+    content:"";position:absolute;inset:0 0 auto;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.09),transparent);
+  }
+  .kepala-panel{
+    display:flex;align-items:center;gap:8px;flex:0 0 auto;
+    padding:9px 11px 7px;border-bottom:1px solid var(--garis);
+  }
+  .kepala-panel h2{
+    margin:0;font-size:10.5px;font-weight:600;letter-spacing:.9px;
+    text-transform:uppercase;color:var(--tinta-3);
+  }
+  .kepala-panel .hitung{color:var(--tinta-2);font-weight:500;letter-spacing:0;
+                        text-transform:none}
+  .gulir{overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}
+  .gulir::-webkit-scrollbar{width:8px}
+  .gulir::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:4px}
+  .gulir::-webkit-scrollbar-track{background:transparent}
+
+  /* ------------------------------------------------------ tata letak */
+  .utama{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);
+         gap:9px;flex:1 1 auto;min-height:0}
+  .kanan-kolom{display:flex;flex-direction:column;gap:9px;min-height:0}
+  /* Tinggi ikut tinggi layar, tapi selalu cukup untuk 3 baris kartu laptop
+     (2 kolom x 3 = 6 laptop). Kalau kurang, kartu terpotong saat digulir. */
+  .bawah{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,.85fr);
+         gap:9px;flex:0 0 auto;height:clamp(212px,33vh,300px)}
+
+  /* ------------------------------------------------ peta jaringan */
+  #peta{width:100%;height:100%;display:block;min-height:0}
+  .peta-bungkus{flex:1 1 auto;min-height:0;position:relative;
+                display:flex;align-items:center;justify-content:center;
+                padding:4px}
+  .legenda{
+    position:absolute;left:11px;bottom:9px;display:flex;gap:13px;
+    font-size:11px;color:var(--tinta-2);pointer-events:none;
+  }
+  .legenda span{display:inline-flex;align-items:center;gap:5px}
+  .contoh-garis{width:16px;height:2px;border-radius:2px}
+  .kosong-peta{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:7px;text-align:center;
+    color:var(--tinta-3);font-size:12px;padding:18px;
+  }
+  .kosong-peta code{
+    background:var(--panel-naik);border:1px solid var(--garis);
+    padding:5px 11px;border-radius:6px;font:11.5px var(--mono);
+    color:var(--tinta-2);user-select:all;
+  }
+
+  /* ---------------------------------------------------------- kartu */
+  .kartu-baris{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;flex:0 0 auto}
+  .kartu{
+    background:var(--panel-naik);border:1px solid var(--garis);border-radius:7px;
+    padding:7px 9px;
+  }
+  .kartu .label{font-size:9.5px;color:var(--tinta-3);text-transform:uppercase;
+                letter-spacing:.6px;white-space:nowrap;overflow:hidden;
+                text-overflow:ellipsis}
+  .kartu .nilai{font-size:19px;font-weight:600;margin-top:1px;line-height:1.15}
+
+  /* ------------------------------------------------------- tulis pesan */
+  .tulis{padding:9px 10px;display:flex;flex-direction:column;gap:7px;flex:0 0 auto}
+  .baris-kirim{display:flex;gap:7px;align-items:stretch}
+  textarea{
+    /* min-width:0 penting — tanpa itu flex item menolak menyusut dan
+       kotak pesan bisa runtuh jadi beberapa piksel. */
+    flex:1 1 auto;min-width:0;
+    background:var(--panel-naik);color:var(--tinta);
+    border:1px solid var(--garis-kuat);border-radius:7px;
+    padding:7px 9px;font:12.5px/1.45 var(--ui);resize:none;height:40px;
+    outline:none;transition:border-color .12s;
+  }
+  textarea:focus{border-color:rgba(63,182,196,.55)}
+  textarea::placeholder{color:var(--tinta-3)}
+  .baris-kirim button{flex:0 0 auto;white-space:nowrap}
+  .bantuan{color:var(--tinta-3);font-size:10.5px}
+
+  /* --------------------------------------------------------- laptop */
+  /* flex-wrap, bukan grid: baris terakhir ikut MELAR mengisi lebar,
+     jadi tidak ada lubang kosong di kanan bawah (5 kartu = 3 + 2 penuh). */
+  .petak-laptop{
+    display:flex;flex-wrap:wrap;gap:6px;padding:6px;align-content:flex-start;
+  }
+  .petak-laptop .laptop{flex:1 1 196px;min-width:0}
+  .petak-laptop.satu .laptop{flex-basis:100%}
+  .laptop{
+    border:1px solid var(--garis);border-radius:8px;background:var(--panel-naik);
+    padding:6px 8px;transition:border-color .2s,opacity .2s;min-width:0;
+  }
+  .laptop.putus{opacity:.45}
+  .laptop.dilayani{border-color:rgba(63,182,196,.5)}
+  .laptop.aktif-kirim{border-color:rgba(232,163,61,.55)}
+  .baris-atas{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .titik{width:7px;height:7px;border-radius:50%;background:var(--hidup);flex:0 0 auto}
+  .titik.mati{background:var(--bahaya)}
+  .nama{font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;
+        text-overflow:ellipsis;min-width:0;flex:1 1 auto}
+  .pil{
+    font-size:9.5px;padding:1.5px 6px;border-radius:99px;font-weight:600;
+    letter-spacing:.2px;border:1px solid transparent;flex:0 0 auto;
+  }
+  .pil.on{color:#a9d9b0;background:rgba(87,163,95,.13);border-color:rgba(87,163,95,.3)}
+  .pil.off{color:#f0a9a4;background:rgba(229,83,75,.12);border-color:rgba(229,83,75,.3)}
+  /* Rincian sistem/IP disimpan sebagai tooltip (title), bukan baris terlihat —
+     supaya 5 kartu muat tanpa menggulir di layar 778 px. */
+  .meta-tip{cursor:help;border-bottom:1px dotted rgba(255,255,255,.18)}
+  .aksi{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px}
+  .aksi button{padding:2px 6px;font-size:10px;line-height:1.5}
+
+  /* ---------------------------------------------------------- tabel */
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th{
+    text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--tinta-3);font-weight:600;padding:0 9px 5px;
+    border-bottom:1px solid var(--garis);position:sticky;top:0;
+    background:var(--panel);z-index:1;
+  }
+  td{padding:5px 9px;border-bottom:1px solid rgba(255,255,255,.04);
+     vertical-align:top}
+  tr:baris-akhir td{border-bottom:none}
+  .lencana{
+    display:inline-block;padding:.5px 6px;border-radius:4px;
+    font-size:10px;font-weight:600;white-space:nowrap;
+  }
+  .lencana.semua{color:#9fd4dc;background:var(--tiba-redup)}
+  .lencana.satu{color:#d8cbe8;background:rgba(163,113,247,.13)}
+  .lencana.server{color:#ffdca8;background:var(--kirim-redup)}
+  .lencana.perintah{color:#d8cbe8;background:rgba(163,113,247,.13)}
+  .kosong{color:var(--tinta-3);font-style:italic;padding:11px 9px;font-size:11.5px}
+  tr.masuk{animation:masuk 1.1s ease-out}
+  @keyframes masuk{from{background:rgba(63,182,196,.13)}to{background:transparent}}
+  .warna-kirim{color:var(--kirim)}
+  .warna-tiba{color:var(--tiba)}
+  .warna-bahaya{color:#f0a9a4}
+  .warna-hidup{color:#a9d9b0}
+  .warna-tunggu{color:var(--tunggu)}
+
+  .cari{
+    background:var(--panel-naik);color:var(--tinta);border:1px solid var(--garis);
+    border-radius:6px;padding:4px 8px;font:11.5px var(--ui);outline:none;
+    margin-left:auto;width:136px;
+  }
+  .cari:focus{border-color:rgba(63,182,196,.5)}
+
+  .aksi-cepat{padding:9px 10px;display:flex;flex-direction:column;gap:6px}
+  .aksi-cepat button{text-align:left;padding:7px 10px;font-size:12px}
+  .kaki-panel{margin-top:auto;padding:8px 10px;border-top:1px solid var(--garis);
+              color:var(--tinta-3);font-size:10.5px}
+
+  /* ----------------------------------------------------- notifikasi
+     Ditaruh di kepala halaman, BUKAN melayang di kanan bawah — supaya tidak
+     pernah menutupi tombol atau tabel di sudut. */
+  #pesan-melayang{
+    display:inline-flex;align-items:center;max-width:0;opacity:0;
+    overflow:hidden;white-space:nowrap;padding-left:0;
+    border-left:2px solid transparent;font-size:11.5px;color:var(--tinta-2);
+    transition:max-width .24s ease,opacity .18s,padding .24s;
+  }
+  #pesan-melayang.tampil{max-width:min(400px,30vw);opacity:1;padding-left:8px}
+  #pesan-melayang.ok{border-left-color:var(--tiba);color:#9fd4dc}
+  #pesan-melayang.gagal{border-left-color:var(--bahaya);color:#f0a9a4}
+  #pesan-melayang.info{border-left-color:var(--kirim);color:#ffdca8}
+
+  /* ----------------------------------------------- mode presentasi */
+  body.besar{font-size:15.5px}
+  body.besar .kartu .nilai{font-size:23px}
+  body.besar table{font-size:13px}
+  body.besar .nama{font-size:14.5px}
+
+  /* --------------------------------------------- animasi SVG peta */
+  .kabel{stroke:rgba(255,255,255,.09);stroke-width:1.4;fill:none}
+  .kabel.terpakai{stroke:rgba(255,255,255,.18)}
+
+  /* aliran air: garis putus-putus yang bergerak sepanjang kabel */
+  .aliran{fill:none;stroke-width:2.1;stroke-linecap:round;opacity:0;
+          transition:opacity .18s}
+  .aliran.menyala{opacity:.85}
+  /* Arah putus-putus mengikuti arah pesan:
+     kirim = laptop → server (offset negatif), tiba = server → laptop (positif).
+     Diperlambat dari .55s ke 1.15s supaya tidak terasa "kilat". */
+  .aliran.kirim{stroke:var(--kirim);stroke-dasharray:5 11;
+                animation:mengalir-maju 1.15s linear infinite}
+  .aliran.tiba{stroke:var(--tiba);stroke-dasharray:5 11;
+               animation:mengalir-balik 1.15s linear infinite}
+  @keyframes mengalir-maju{to{stroke-dashoffset:-16}}
+  @keyframes mengalir-balik{to{stroke-dashoffset:16}}
+
+  .simpul rect{fill:var(--panel-naik);stroke:var(--garis-kuat);stroke-width:1.2;
+               transition:stroke .2s,fill .2s}
+  .simpul text{fill:var(--tinta);font:600 11.5px var(--ui)}
+  .simpul .ket{fill:var(--tinta-3);font:400 9.5px var(--mono)}
+  .simpul.mati rect{stroke:rgba(229,83,75,.42)}
+  .simpul.mati text{fill:var(--tinta-3)}
+  .simpul.kirim-aktif rect{stroke:var(--kirim);
+                           fill:rgba(232,163,61,.09)}
+  .simpul.tiba-aktif rect{stroke:var(--tiba);
+                          fill:rgba(63,182,196,.09)}
+  .simpul.server rect{stroke:var(--garis-kuat);fill:var(--panel)}
+  .simpul.server.aktif rect{stroke:var(--server);
+                            fill:rgba(255,255,255,.05)}
+
+  .cincin{fill:none;stroke-width:1.6;opacity:0}
+  .cincin.kirim{stroke:var(--kirim)}
+  .cincin.tiba{stroke:var(--tiba)}
+  .cincin.server{stroke:var(--server)}
+
+  @media (prefers-reduced-motion:reduce){
+    .denyut{animation:none}
+    .aliran{animation:none;opacity:0}
+    tr.masuk{animation:none}
+  }
+  @media (max-width:1180px){
+    .utama{grid-template-columns:1fr}
+    .bawah{grid-template-columns:1fr 1fr}
+    .kanan-kolom{max-height:44vh}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="merk">
+    <span class="denyut" id="titik-hidup"></span>
+    <h1>Dashboard Server</h1>
+    <span class="sub">MK Sistem Paralel dan Terdistribusi · Ilmu Komputer UBBG</span>
+  </div>
+  <div class="kanan">
+    <span id="pesan-melayang"></span>
+    <span class="jam mono" id="jam">—</span>
+    <button id="btn-jeda" title="Hentikan penyegaran sementara">Jeda</button>
+    <button id="btn-besar" title="Perbesar huruf untuk presentasi">A+</button>
+  </div>
+</header>
+
+<!-- ===================== baris atas ===================== -->
+<div class="utama">
+
+  <!-- ---------- peta jaringan ---------- -->
+  <div class="panel">
+    <div class="kepala-panel">
+      <h2>Peta Jaringan</h2>
+      <span class="hitung mono" id="h-peta">0 laptop</span>
+      <span class="sub" style="margin-left:auto" id="peta-status"></span>
+    </div>
+
+    <div class="peta-bungkus">
+      <svg id="peta" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <filter id="sinar" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="3.4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <g id="lapisan-kabel"></g>
+        <g id="lapisan-simpul"></g>
+        <g id="lapisan-paket"></g>
+      </svg>
+
+      <div class="kosong-peta" id="kosong-peta">
+        <div>Belum ada laptop yang tersambung.</div>
+        <div>Jalankan di laptop anggota:</div>
+        <code id="perintah-klien">python3 client.py --server 192.168.1.7</code>
+        <div style="font-size:10.5px">Klik untuk memilih, lalu salin.</div>
+      </div>
+
+      <div class="legenda">
+        <span><i class="contoh-garis" style="background:var(--kirim)"></i> pesan pergi</span>
+        <span><i class="contoh-garis" style="background:var(--tiba)"></i> pesan tiba</span>
+        <span><i class="contoh-garis" style="background:rgba(255,255,255,.2)"></i> kabel</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------- kolom kanan ---------- -->
+  <div class="kanan-kolom">
+
+    <div class="kartu-baris">
+      <div class="kartu"><div class="label">Laptop</div>
+        <div class="nilai mono" id="s-online">0</div></div>
+      <div class="kartu"><div class="label">Pesan</div>
+        <div class="nilai mono" id="s-pesan">0</div></div>
+      <div class="kartu"><div class="label">Perintah</div>
+        <div class="nilai mono" id="s-perintah">0</div></div>
+      <div class="kartu"><div class="label">Server</div>
+        <div class="nilai" id="s-status" style="font-size:14px">—</div></div>
+    </div>
+
+    <div class="panel" style="flex:0 0 auto">
+      <div class="kepala-panel"><h2>Kirim Pesan</h2></div>
+      <div class="tulis">
+        <div class="baris-kirim">
+          <textarea id="isi-pesan" maxlength="2000"
+            placeholder="Tulis pesan untuk semua laptop…"></textarea>
+          <button class="tombol-utama lega" id="btn-kirim">Kirim<br>ke semua</button>
+        </div>
+        <div class="bantuan">
+          <span class="mono" id="sisa">2000</span> karakter ·
+          Enter kirim · Shift+Enter baris baru
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="flex:1 1 auto;min-height:0">
+      <div class="kepala-panel">
+        <h2>Pesan Terakhir</h2>
+        <span class="sub" style="margin-left:auto" id="arus-info"></span>
+      </div>
+      <div class="gulir">
+        <table>
+          <thead><tr><th style="width:54px">Jam</th><th style="width:104px">Dari</th>
+            <th style="width:88px">Ke</th><th>Isi</th></tr></thead>
+          <tbody id="isi-pesan-tabel">
+            <tr><td colspan="4" class="kosong">Belum ada pesan.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== baris bawah ===================== -->
+<div class="bawah">
+
+  <div class="panel">
+    <div class="kepala-panel">
+      <h2>Laptop</h2>
+      <span class="hitung mono" id="h-online">(0)</span>
+      <input class="cari" id="cari" placeholder="cari laptop…">
+    </div>
+    <div class="gulir" id="daftar-laptop"></div>
+  </div>
+
+  <div class="panel">
+    <div class="kepala-panel"><h2>Riwayat Perintah</h2></div>
+    <div class="gulir">
+      <table>
+        <thead><tr><th style="width:54px">Jam</th><th style="width:92px">Laptop</th>
+          <th style="width:74px">Aksi</th><th>Hasil</th></tr></thead>
+        <tbody id="isi-perintah">
+          <tr><td colspan="4" class="kosong">Belum ada perintah.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="kepala-panel"><h2>Sambung / Putus</h2></div>
+    <div class="gulir">
+      <table>
+        <thead><tr><th style="width:66px">Jam</th><th>Laptop</th>
+          <th style="width:88px">Kejadian</th></tr></thead>
+        <tbody id="isi-kejadian">
+          <tr><td colspan="3" class="kosong">Belum ada kejadian.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="kaki-panel">
+      <button id="btn-csv" style="width:100%">Unduh riwayat (CSV)</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   Peta jaringan + animasi aliran.
+   Server di tengah, laptop mengelilinginya. Waktu ada pesan:
+     1. simpul pengirim berdenyut warna AMBER
+     2. paket berjalan pengirim → server, kabel menyala amber
+     3. server berdenyut cincin putih
+     4. paket berjalan server → tiap penerima, kabel menyala TEAL
+   ========================================================================== */
+
+const SVG = "http://www.w3.org/2000/svg";
+const el = (id) => document.getElementById(id);
+const JAM = (s) => (s || "").slice(-8);
+const AMAN = (s) => String(s ?? "").replace(/[<>&"]/g,
+  (c) => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const KURANGI_GERAK = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* Posisi simpul. Server di tengah; laptop di elips sekelilingnya. */
+const PUSAT = { x: 400, y: 262 };
+const JARI = { x: 296, y: 196 };
+const SUDUT = [-54, 18, 90, 162, 234];   /* 5 posisi, digeser 36° */
+const UKURAN = { w: 132, h: 44 };
+
+let simpulPeta = new Map();   /* nama -> {x,y,g,kabel,aliran,...} */
+let dataTerakhir = null;
+let jeda = false;
+let laptopPutus = new Map();  /* nama -> waktu putus (ditahan 60 detik) */
+let idPesanTerakhir = 0;
+let pertamaKali = true;
+
+/* ------------------------------------------------------------- notifikasi */
+let jamNotif = null;
+function beritahu(teks, jenis = "info") {
+  const t = el("pesan-melayang");
+  t.textContent = teks;
+  t.className = "tampil " + jenis;
+  clearTimeout(jamNotif);
+  jamNotif = setTimeout(() => { t.className = ""; }, 3400);
+}
+
+/* ============================================================ gambar peta */
+function posisiLaptop(jumlah) {
+  const titik = [];
+  for (let i = 0; i < jumlah; i++) {
+    const sudut = (SUDUT[i % SUDUT.length] * Math.PI) / 180;
+    titik.push({
+      x: PUSAT.x + Math.cos(sudut) * JARI.x,
+      y: PUSAT.y + Math.sin(sudut) * JARI.y,
+    });
+  }
+  return titik;
+}
+
+function buatLapisan(daftar) {
+  const kabel = el("lapisan-kabel");
+  const simpul = el("lapisan-simpul");
+  kabel.innerHTML = "";
+  simpul.innerHTML = "";
+  simpulPeta.clear();
+
+  /* --- simpul server, selalu ada --- */
+  const gServer = document.createElementNS(SVG, "g");
+  gServer.setAttribute("class", "simpul server");
+  gServer.innerHTML = `
+    <rect x="${PUSAT.x - 78}" y="${PUSAT.y - 30}" width="156" height="60" rx="9"/>
+    <text x="${PUSAT.x}" y="${PUSAT.y - 4}" text-anchor="middle">SERVER</text>
+    <text class="ket" x="${PUSAT.x}" y="${PUSAT.y + 13}"
+          text-anchor="middle" fill="#6d757e">Mac ketua</text>`;
+  simpul.appendChild(gServer);
+  window.__serverG = gServer;
+  window.__serverRect = { x: PUSAT.x - 78, y: PUSAT.y - 30, w: 156, h: 60 };
+
+  /* --- kabel + simpul laptop --- */
+  const posisi = posisiLaptop(Math.max(daftar.length, 1));
+  daftar.forEach((orang, i) => {
+    const p = posisi[i];
+
+    /* kabel: lengkung lembut dari laptop ke server */
+    const jalur = document.createElementNS(SVG, "path");
+    const dx = PUSAT.x - p.x, dy = PUSAT.y - p.y;
+    const mx = p.x + dx * .5, my = p.y + dy * .5;
+    const bengkok = (i % 2 ? 1 : -1) * 26;
+    jalur.setAttribute("d",
+      `M ${p.x} ${p.y} Q ${mx - dy * .06 + bengkok} ${my + dx * .06 - bengkok} ${PUSAT.x} ${PUSAT.y}`);
+    jalur.setAttribute("class", "kabel");
+    kabel.appendChild(jalur);
+
+    /* aliran di atas kabel — garis putus-putus yang bergerak */
+    const aliran = document.createElementNS(SVG, "path");
+    aliran.setAttribute("d", jalur.getAttribute("d"));
+    aliran.setAttribute("class", "aliran");
+    kabel.appendChild(aliran);
+
+    /* Jalur yang SAMA tapi arah terbalik: server → laptop.
+       Kabel di SVG digambar dari laptop ke server, jadi paket yang menuju
+       laptop (pesan masuk, teal) harus punya jalur sendiri — kalau memakai
+       `jalur` yang asli, partikelnya jalan MUNDUR dari laptop ke server. */
+    const jalurBalik = document.createElementNS(SVG, "path");
+    jalurBalik.setAttribute("d",
+      `M ${PUSAT.x} ${PUSAT.y} Q ${mx - dy * .06 + bengkok} ${my + dx * .06 - bengkok} ${p.x} ${p.y}`);
+
+    /* simpul laptop */
+    const g = document.createElementNS(SVG, "g");
+    g.setAttribute("class", "simpul");
+    const hidup = orang.hidup !== false;
+    if (!hidup) g.setAttribute("class", "simpul mati");
+    g.innerHTML = `
+      <rect x="${p.x - UKURAN.w / 2}" y="${p.y - UKURAN.h / 2}"
+            width="${UKURAN.w}" height="${UKURAN.h}" rx="8"/>
+      <circle cx="${p.x - UKURAN.w / 2 + 13}" cy="${p.y - 6}" r="3.4"
+              fill="${hidup ? "#57a35f" : "#e5534b"}"/>
+      <text x="${p.x - UKURAN.w / 2 + 24}" y="${p.y - 2}">${AMAN(orang.nama)}</text>
+      <text class="ket" x="${p.x - UKURAN.w / 2 + 24}" y="${p.y + 12}"
+            text-anchor="start" fill="#6d757e">${hidup ? "aktif" : "terputus"}</text>`;
+    simpul.appendChild(g);
+
+    simpulPeta.set(orang.nama, { x: p.x, y: p.y, g, jalur, jalurBalik, aliran,
+                                 hidup, nama: orang.nama });
+  });
+}
+
+/* ==========================================================================
+   Animasi paket.
+
+   Pelajaran penting: requestAnimationFrame MATI saat tab tidak aktif
+   (pindah tab, jendela lain, atau layar terkunci). Kalau tidak dijaga, paket
+   yang sedang jalan tidak pernah selesai dan menumpuk di peta — peta jadi
+   penuh partikel nyangkut.
+
+   Penjagaan:
+     1. Bersihkan paket lama sebelum memulai yang baru.
+     2. Kalau tab tidak aktif, jangan dianimasikan — langsung lompat ke hasil.
+     3. Jaring pengaman: hapus paksa paket yang lewat batas waktu.
+   ========================================================================== */
+
+const BATAS_UMUR_PAKET = 5000;   /* ms — paket lebih tua dari ini dibuang */
+
+/* Kecepatan animasi. Makin besar makin lambat — diatur di satu tempat
+   supaya mudah disetel. Sebelumnya 620 ms; sekarang dilembutkan. */
+const DURASI_PAKET   = 1150;   /* ms — laptop → server, dan server → laptop */
+
+function bersihkanPaketLama() {
+  const lapisan = el("lapisan-paket");
+  const sekarang = performance.now();
+  [...lapisan.children].forEach((g) => {
+    const mulai = Number(g.dataset.mulai || 0);
+    if (!mulai || sekarang - mulai > BATAS_UMUR_PAKET) g.remove();
+  });
+}
+
+function titikDiJalur(path, t) {
+  const L = path.getTotalLength();
+  const p = path.getPointAtLength(Math.max(0, Math.min(1, t)) * L);
+  return { x: p.x, y: p.y };
+}
+
+
+function jalankanPaket(path, warna, durasi, saatSampai) {
+  /* Tab tidak aktif → rAF mati. Jangan menumpuk; langsung ke hasilnya. */
+  if (KURANGI_GERAK || document.hidden) {
+    if (saatSampai) setTimeout(saatSampai, 40);
+    return;
+  }
+  bersihkanPaketLama();
+
+  const grup = document.createElementNS(SVG, "g");
+  grup.setAttribute("filter", "url(#sinar)");
+  grup.dataset.mulai = String(performance.now());
+  const ekor = [];
+  for (let i = 0; i < 4; i++) {
+    const c = document.createElementNS(SVG, "circle");
+    c.setAttribute("r", String(3.6 - i * .7));
+    c.setAttribute("fill", warna);
+    c.setAttribute("opacity", String(.85 - i * .2));
+    grup.appendChild(c);
+    ekor.push(c);
+  }
+  const kepala = document.createElementNS(SVG, "circle");
+  kepala.setAttribute("r", "4.2");
+  kepala.setAttribute("fill", warna);
+  grup.appendChild(kepala);
+  el("lapisan-paket").appendChild(grup);
+
+  let selesai = false;
+  function beres() {
+    if (selesai) return;
+    selesai = true;
+    grup.remove();
+    if (saatSampai) saatSampai();
+  }
+  /* jaring pengaman: apa pun yang terjadi, jangan biarkan paket menumpuk */
+  const pengaman = setTimeout(beres, durasi + 1300);
+
+  const mulai = performance.now();
+  function langkah(sekarang) {
+    const t = Math.min((sekarang - mulai) / durasi, 1);
+    /* gerak halus di ujung */
+    const g = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const kepalaP = titikDiJalur(path, g);
+    kepala.setAttribute("cx", kepalaP.x);
+    kepala.setAttribute("cy", kepalaP.y);
+    ekor.forEach((c, i) => {
+      const te = Math.max(0, g - (i + 1) * .030);
+      const q = titikDiJalur(path, te);
+      c.setAttribute("cx", q.x);
+      c.setAttribute("cy", q.y);
+    });
+    if (t < 1) requestAnimationFrame(langkah);
+    else { clearTimeout(pengaman); beres(); }
+  }
+  requestAnimationFrame(langkah);
+}
+
+function denyutSudut(g, warna, x, y, lebar, tinggi) {
+  if (KURANGI_GERAK) return;
+  const c = document.createElementNS(SVG, "rect");
+  c.setAttribute("x", x); c.setAttribute("y", y);
+  c.setAttribute("width", lebar); c.setAttribute("height", tinggi);
+  c.setAttribute("rx", "9");
+  c.setAttribute("class", "cincin " + warna);
+  c.setAttribute("opacity", ".75");
+  el("lapisan-paket").appendChild(c);
+  let t0 = null;
+  function langkah(now) {
+    if (t0 === null) t0 = now;
+    const t = Math.min((now - t0) / 620, 1);
+    const tambah = t * 16;
+    c.setAttribute("x", x - tambah); c.setAttribute("y", y - tambah * .55);
+    c.setAttribute("width", lebar + tambah * 2);
+    c.setAttribute("height", tinggi + tambah * 1.1);
+    c.setAttribute("opacity", String(.75 * (1 - t)));
+    if (t < 1) requestAnimationFrame(langkah); else c.remove();
+  }
+  requestAnimationFrame(langkah);
+}
+
+/* ------------------------------------------------------------------------
+   Alur satu pesan:
+     pengirim → server (amber) → tiap penerima (teal, berurutan sedikit)
+   ------------------------------------------------------------------------ */
+function alirkanPesan(pengirim, paraPenerima) {
+  const W = "#e8a33d";   /* amber */
+  const T = "#3fb6c4";   /* teal */
+
+  /* --- pesan dari dashboard (bukan dari laptop) --- */
+  if (pengirim === "SERVER") {
+    const sr = window.__serverRect;
+    denyutSudut(window.__serverG, "server", sr.x, sr.y, sr.w, sr.h);
+    paraPenerima.forEach((nama, i) => {
+      const s = simpulPeta.get(nama);
+      if (!s) return;
+      setTimeout(() => {
+        jalankanPaket(s.jalurBalik, T, DURASI_PAKET, () => {
+          s.aliran.setAttribute("class", "aliran tiba menyala");
+          s.g.setAttribute("class", "simpul tiba-aktif");
+          const r = { x: s.x - UKURAN.w / 2, y: s.y - UKURAN.h / 2 };
+          denyutSudut(s.g, "tiba", r.x, r.y, UKURAN.w, UKURAN.h);
+          setTimeout(() => {
+            s.aliran.setAttribute("class", "aliran");
+            s.g.setAttribute("class", s.hidup ? "simpul" : "simpul mati");
+          }, 1500);
+        });
+      }, i * 150);
+    });
+    petakanKedip(paraPenerima, "tiba");
+    return;
+  }
+
+  const asal = simpulPeta.get(pengirim);
+  if (!asal) { petakanKedip(paraPenerima, "tiba"); return; }
+
+  /* 1. pengirim berdenyut */
+  asal.aliran.setAttribute("class", "aliran kirim menyala");
+  asal.g.setAttribute("class", "simpul kirim-aktif");
+  denyutSudut(asal.g, "kirim",
+              asal.x - UKURAN.w / 2, asal.y - UKURAN.h / 2, UKURAN.w, UKURAN.h);
+
+  /* 2. paket ke server */
+  jalankanPaket(asal.jalur, W, DURASI_PAKET, () => {
+    asal.aliran.setAttribute("class", "aliran");
+    asal.g.setAttribute("class", asal.hidup ? "simpul" : "simpul mati");
+
+    /* 3. server berdenyut */
+    const sr = window.__serverRect;
+    denyutSudut(window.__serverG, "server", sr.x, sr.y, sr.w, sr.h);
+
+    /* 4. sebar ke penerima, berurutan supaya terbaca */
+    paraPenerima.forEach((nama, i) => {
+      const s = simpulPeta.get(nama);
+      if (!s) return;
+      setTimeout(() => {
+        jalankanPaket(s.jalurBalik, T, DURASI_PAKET, () => {
+          s.aliran.setAttribute("class", "aliran tiba menyala");
+          s.g.setAttribute("class", "simpul tiba-aktif");
+          denyutSudut(s.g, "tiba",
+                      s.x - UKURAN.w / 2, s.y - UKURAN.h / 2, UKURAN.w, UKURAN.h);
+          setTimeout(() => {
+            s.aliran.setAttribute("class", "aliran");
+            s.g.setAttribute("class", s.hidup ? "simpul" : "simpul mati");
+          }, 1400);
+        });
+      }, i * 150);
+    });
+  });
+
+  petakanKedip(paraPenerima, "tiba");
+}
+
+/* kedipkan baris tabel si penerima */
+function petakanKedip(paraNama, jenis) {
+  const kelas = jenis === "tiba" ? "laptop dilayani" : "laptop aktif-kirim";
+  paraNama.forEach((nama) => {
+    const kartu = document.querySelector(`.laptop[data-nama="${CSS.escape(nama)}"]`);
+    if (!kartu) return;
+    kartu.classList.add(kelas.split(" ")[1]);
+    setTimeout(() => kartu.classList.remove(kelas.split(" ")[1]), 1500);
+  });
+}
+
+/* ==================================================== penyegaran keadaan */
+async function muat(paksa = false) {
+  if (jeda && !paksa) return;
+  try {
+    const r = await fetch("/api/keadaan", { cache: "no-store" });
+    const d = await r.json();
+
+    const baru = d.pesan.filter((p) => p.id > idPesanTerakhir);
+    const namaSekarang = new Set(d.online.map((x) => x.nama));
+
+    /* catat laptop yang baru putus supaya tetap tampil sebentar */
+    if (dataTerakhir) {
+      for (const k of dataTerakhir.online) {
+        if (!namaSekarang.has(k.nama)) laptopPutus.set(k.nama, Date.now());
+      }
+    }
+    for (const n of namaSekarang) laptopPutus.delete(n);
+
+    dataTerakhir = d;
+
+    /* gambar ulang peta hanya kalau susunannya berubah */
+    const kunciBaru = d.online.map((x) => x.nama).join("|");
+    if (kunciBaru !== window.__kunciPeta) {
+      window.__kunciPeta = kunciBaru;
+      const tampil = d.online.map((x) => ({ nama: x.nama, hidup: true }));
+      /* tambahkan yang baru putus (ditahan 60 detik) */
+      for (const [nama, waktu] of laptopPutus) {
+        if (Date.now() - waktu < 60000 && !tampil.some((t) => t.nama === nama))
+          tampil.push({ nama, hidup: false });
+      }
+      buatLapisan(tampil);
+    } else {
+      /* perbarui keadaan hidup/mati tanpa gambar ulang */
+      const semua = [...d.online.map((x) => ({ nama: x.nama, hidup: true }))];
+      for (const [nama, waktu] of laptopPutus) {
+        if (Date.now() - waktu < 60000 && !semua.some((t) => t.nama === nama))
+          semua.push({ nama, hidup: false });
+      }
+      if (semua.length !== simpulPeta.size) buatLapisan(semua);
+    }
+
+    gambar(d, baru);
+    el("jam").textContent = "diperbarui " + new Date().toLocaleTimeString("id-ID");
+    el("perintah-klien").textContent = `python3 client.py --server ${location.hostname}`;
+    el("titik-hidup").style.background = "var(--hidup)";
+  } catch (e) {
+    el("s-status").textContent = "TERPUTUS";
+    el("s-status").style.color = "var(--bahaya)";
+    el("jam").textContent = "server tidak menjawab";
+    el("titik-hidup").style.background = "var(--bahaya)";
+  }
+}
+
+function gambar(d, pesanBaru) {
+  el("s-online").textContent = d.online.length;
+  el("s-pesan").textContent = d.jumlah.pesan.toLocaleString("id-ID");
+  el("s-perintah").textContent = d.jumlah.perintah.toLocaleString("id-ID");
+  const st = el("s-status");
+  st.textContent = "AKTIF"; st.style.color = "var(--hidup)";
+  el("h-online").textContent = `(${d.online.length})`;
+  el("h-peta").textContent =
+    d.online.length === 1 ? "1 laptop" : `${d.online.length} laptop`;
+  el("peta-status").textContent = d.online.length ? "" : "";
+
+  el("kosong-peta").style.display = d.online.length ? "none" : "flex";
+
+  gambarLaptop(d.online);
+  gambarPesan(d.pesan);
+  gambarPerintah(d.perintah);
+  gambarKejadian(d.kejadian);
+
+  /* --- jalankan animasi untuk pesan yang BARU masuk --- */
+  if (!pertamaKali && pesanBaru.length) {
+    pesanBaru
+      .slice()
+      .sort((a, b) => a.id - b.id)
+      .forEach((p, i) => {
+        const penerima =
+          p.tujuan === "semua"
+            ? d.online.map((x) => x.nama).filter((n) => n !== p.pengirim)
+            : [p.tujuan];
+        if (!penerima.length) return;
+        setTimeout(() => alirkanPesan(p.pengirim, penerima), i * 420);
+      });
+  }
+  if (d.pesan.length) idPesanTerakhir = Math.max(idPesanTerakhir, d.pesan[0].id);
+  pertamaKali = false;
+
+  /* ringkasan arus terakhir */
+  const terakhir = d.pesan[0];
+  el("arus-info").textContent = terakhir
+    ? `${terakhir.pengirim} → ${terakhir.tujuan}`
+    : "";
+}
+
+/* ------------------------------------------------------------- penggambar */
+function gambarLaptop(daftar) {
+  const cari = el("cari").value.trim().toLowerCase();
+  const wadah = el("daftar-laptop");
+
+  const sekarang = Date.now();
+  const semua = new Map();
+  for (const k of daftar) semua.set(k.nama, { ...k, hidup: true });
+  for (const [nama, waktu] of laptopPutus) {
+    if (!semua.has(nama) && sekarang - waktu < 60000)
+      semua.set(nama, { nama, hidup: false, sistem: "-", ip: "-", lama: "-" });
+  }
+
+  let isi = [...semua.values()];
+  if (cari) isi = isi.filter((k) => k.nama.toLowerCase().includes(cari));
+
+  if (!isi.length) {
+    wadah.innerHTML = `<div class="kosong" style="padding:14px 11px">${
+      daftar.length
+        ? `Tidak ada laptop yang cocok dengan "${AMAN(cari)}".`
+        : "Belum ada laptop yang tersambung."
+    }</div>`;
+    return;
+  }
+
+  const kartu = isi
+    .map((k) => {
+      const aksi = k.hidup
+        ? `<button class="tombol-utama" data-nama="${AMAN(k.nama)}" data-aksi="pesan">Pesan</button>
+           <button data-nama="${AMAN(k.nama)}" data-aksi="kunci">Kunci</button>
+           <button data-nama="${AMAN(k.nama)}" data-aksi="restart">Restart</button>
+           <button class="bahaya" data-nama="${AMAN(k.nama)}" data-aksi="matikan">Matikan</button>`
+        : `<span class="meta" style="overflow:visible">Tombol dimatikan — laptop tidak tersambung.</span>`;
+      const rincian = `${k.sistem} · ${k.ip} · ${k.lama}`;
+      return `<div class="laptop ${k.hidup ? "" : "putus"}" data-nama="${AMAN(k.nama)}"
+              title="${AMAN(k.nama)} — ${AMAN(rincian)}">
+        <div class="baris-atas">
+          <span class="titik ${k.hidup ? "" : "mati"}"></span>
+          <span class="nama meta-tip" title="${AMAN(rincian)}">${AMAN(k.nama)}</span>
+          <span class="pil ${k.hidup ? "on" : "off"}">${k.hidup ? "tersambung" : "terputus"}</span>
+        </div>
+        <div class="aksi">${aksi}</div>
+      </div>`;
+    })
+    .join("");
+
+  /* dua kolom supaya 5 laptop muat tanpa menggulir */
+  wadah.innerHTML =
+    `<div class="petak-laptop${isi.length === 1 ? " satu" : ""}">${kartu}</div>`;
+
+  wadah.querySelectorAll("button[data-aksi]").forEach((b) => {
+    b.onclick = () => perintah(b.dataset.nama, b.dataset.aksi, b);
+  });
+}
+
+function isiTabel(id, baris, kolom, kosong) {
+  const wadah = el(id);
+  if (!baris.length) {
+    wadah.innerHTML = `<tr><td colspan="${kolom}" class="kosong">${kosong}</td></tr>`;
+    return;
+  }
+  wadah.innerHTML = baris
+    .map((r, i) => `<tr class="${i === 0 ? "masuk" : ""}">${r}</tr>`)
+    .join("");
+}
+
+function gambarPesan(daftar) {
+  isiTabel("isi-pesan-tabel", daftar.map((p) => {
+    const tujuan =
+      p.tujuan === "semua"
+        ? `<span class="lencana semua">semua</span>`
+        : `<span class="lencana satu">${AMAN(p.tujuan)}</span>`;
+    const asal =
+      p.pengirim === "SERVER"
+        ? `<span class="lencana server">server</span>`
+        : AMAN(p.pengirim);
+    return `<td class="mono" style="color:var(--tinta-3)">${JAM(p.waktu)}</td>
+            <td>${asal}</td><td>${tujuan}</td>
+            <td>${AMAN(p.isi)}</td>`;
+  }), 4, "Belum ada pesan.");
+}
+
+function gambarPerintah(daftar) {
+  isiTabel("isi-perintah", daftar.map((p) => {
+    let hasil, warna;
+    if (p.dijawab === null || p.dijawab === undefined) {
+      hasil = "menunggu jawaban…"; warna = "warna-tunggu";
+    } else if (p.berhasil) {
+      hasil = AMAN(p.hasil); warna = "warna-hidup";
+    } else {
+      hasil = AMAN(p.hasil || "gagal"); warna = "warna-bahaya";
+    }
+    return `<td class="mono" style="color:var(--tinta-3)">${JAM(p.dikirim)}</td>
+            <td>${AMAN(p.sasaran)}</td>
+            <td><span class="lencana perintah">${AMAN(p.aksi)}</span></td>
+            <td class="${warna}">${hasil}</td>`;
+  }), 4, "Belum ada perintah.");
+}
+
+function gambarKejadian(daftar) {
+  isiTabel("isi-kejadian", daftar.map((k) => {
+    const masuk = k.jenis === "masuk";
+    return `<td class="mono" style="color:var(--tinta-3)">${JAM(k.waktu)}</td>
+            <td>${AMAN(k.nama)}</td>
+            <td><span class="pil ${masuk ? "on" : "off"}">${
+              masuk ? "tersambung" : "terputus"}</span></td>`;
+  }), 3, "Belum ada kejadian.");
+}
+
+/* ============================================================== kendali */
+el("btn-jeda").onclick = () => {
+  jeda = !jeda;
+  el("btn-jeda").textContent = jeda ? "Lanjut" : "Jeda";
+  beritahu(jeda ? "Penyegaran dijeda." : "Penyegaran dilanjutkan.", "info");
+};
+
+el("btn-besar").onclick = () => {
+  document.body.classList.toggle("besar");
+  beritahu(document.body.classList.contains("besar")
+    ? "Mode presentasi: huruf diperbesar." : "Ukuran huruf normal.", "info");
+};
+
+el("btn-csv").onclick = () => {
+  if (!dataTerakhir) { beritahu("Belum ada data.", "gagal"); return; }
+  const baris = [["jenis","waktu","dari_atau_sasaran","tujuan_atau_aksi","isi_atau_hasil"]];
+  for (const p of [...dataTerakhir.pesan].reverse())
+    baris.push(["pesan", p.waktu, p.pengirim, p.tujuan, p.isi]);
+  for (const p of [...dataTerakhir.perintah].reverse())
+    baris.push(["perintah", p.dikirim, "server", `${p.aksi} -> ${p.sasaran}`,
+                p.hasil || "menunggu"]);
+  for (const k of [...dataTerakhir.kejadian].reverse())
+    baris.push(["kejadian", k.waktu, k.nama, k.jenis, ""]);
+  const csv = baris
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `riwayat-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  beritahu("Riwayat diunduh sebagai CSV.", "ok");
+};
+
+async function kirimKeSemua() {
+  const isi = el("isi-pesan").value.trim();
+  if (!isi) { beritahu("Pesannya masih kosong.", "gagal"); return; }
+  if (!dataTerakhir || !dataTerakhir.online.length) {
+    beritahu("Belum ada laptop yang tersambung.", "gagal"); return;
+  }
+  const r = await fetch(`/api/pesan?tujuan=semua&isi=${encodeURIComponent(isi)}`);
+  const d = await r.json();
+  if (d.ok) {
+    el("isi-pesan").value = "";
+    perbaruiSisa();
+    beritahu(`Pesan terkirim ke ${d.terkirim} laptop.`, "ok");
+  } else {
+    beritahu("Gagal: " + (d.pesan || "tidak diketahui"), "gagal");
+  }
+  muat(true);
+}
+
+el("btn-kirim").onclick = kirimKeSemua;
+el("isi-pesan").addEventListener("input", perbaruiSisa);
+el("isi-pesan").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); kirimKeSemua(); }
+});
+function perbaruiSisa() {
+  const sisa = 2000 - el("isi-pesan").value.length;
+  el("sisa").textContent = sisa.toLocaleString("id-ID");
+  el("sisa").style.color = sisa < 100 ? "var(--tunggu)" : "";
+}
+
+el("cari").addEventListener("input", () => gambarLaptop(dataTerakhir?.online || []));
+
+async function perintah(nama, aksi, tombol) {
+  if (aksi === "matikan" || aksi === "restart") {
+    const katanya = aksi === "matikan" ? "MATIKAN" : "RESTART";
+    const jawab = prompt(
+      `${katanya} laptop "${nama}"?\n\n` +
+      `Laptop itu akan ${aksi === "matikan" ? "mati" : "restart"} dalam 30 detik ` +
+      `(masih bisa dibatalkan).\n\n` +
+      `Ketik ulang nama laptop untuk melanjutkan:`);
+    if (jawab === null) return;
+    if (jawab.trim() !== nama) {
+      beritahu("Nama tidak cocok — dibatalkan.", "gagal");
+      return;
+    }
+  }
+
+  if (aksi === "pesan") {
+    const isi = prompt(`Tulis pesan untuk "${nama}":`, "");
+    if (!isi) return;
+    tombol.disabled = true; tombol.textContent = "mengirim…";
+    const r = await fetch(`/api/pesan?tujuan=${encodeURIComponent(nama)}&isi=${encodeURIComponent(isi)}`);
+    const d = await r.json();
+    tombol.disabled = false; tombol.textContent = "Kirim pesan";
+    beritahu(d.ok ? `Pesan terkirim ke ${nama}.` : "Gagal: " + d.pesan,
+             d.ok ? "ok" : "gagal");
+    muat(true);
+    return;
+  }
+
+  const asal = tombol.textContent;
+  tombol.disabled = true; tombol.textContent = "mengirim…";
+  const r = await fetch(`/api/perintah?sasaran=${encodeURIComponent(nama)}&aksi=${encodeURIComponent(aksi)}`);
+  const d = await r.json();
+  tombol.disabled = false; tombol.textContent = asal;
+  if (d.ok) {
+    const kirimKeSimpul = simpulPeta.get(nama);
+    if (kirimKeSimpul) {
+      const sr = window.__serverRect;
+      denyutSudut(window.__serverG, "server", sr.x, sr.y, sr.w, sr.h);
+      denyutSudut(kirimKeSimpul.g, "kirim",
+                  kirimKeSimpul.x - UKURAN.w / 2,
+                  kirimKeSimpul.y - UKURAN.h / 2, UKURAN.w, UKURAN.h);
+      kirimKeSimpul.aliran.setAttribute("class", "aliran kirim menyala");
+      setTimeout(() => kirimKeSimpul.aliran.setAttribute("class", "aliran"), 1400);
+    }
+    beritahu(`Perintah "${aksi}" terkirim ke ${nama} — menunggu jawaban.`, "info");
+  } else {
+    beritahu("Gagal: " + (d.pesan || "tidak diketahui"), "gagal");
+  }
+  muat(true);
+}
+
+/* tampilkan jam berjalan supaya terlihat hidup */
+setInterval(() => {
+  if (!jeda) el("jam").textContent =
+    "diperbarui " + new Date().toLocaleTimeString("id-ID");
+}, 1000);
+
+perbaruiSisa();
+muat(true);
+setInterval(muat, 1200);
+</script>
+</body>
+</html>
