@@ -363,7 +363,15 @@ class Pengguna:
             self.tampil.put(f"  · {data.get('pesan')}")
 
         elif tipe == "galat":
-            self.tampil.put(f"  ✗ {data.get('pesan')}")
+            pesan = data.get('pesan', '')
+            self.tampil.put(f"  ✗ {pesan}")
+            # Kalau server menolak nama (duplikat), hentikan program dengan
+            # pesan yang jelas supaya pengguna tahu harus ganti nama.
+            if "sudah dipakai" in pesan:
+                self.tampil.put("")
+                self.tampil.put("  >> Ganti nama di src/user/nama.txt lalu jalankan ulang.")
+                self.tampil.put("")
+                self.jalan = False
 
         elif tipe == "ping":
             self.kirim({"tipe": "pong"})

@@ -238,11 +238,16 @@ def layani(p: Pengguna) -> None:
                     p.kirim({"tipe": "galat", "pesan": "baris terlalu panjang"})
                     continue
                 try:
-                    data = json.loads(baris.decode("utf-8"))
+                    paket = json.loads(baris.decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):
                     p.kirim({"tipe": "galat", "pesan": "data tidak bisa dibaca"})
                     continue
-                tangani(p, data)
+                try:
+                    tangani(p, paket)
+                except Exception as e:
+                    catat(f"  [ERROR] tangani() crash untuk {p.nama}: {e}")
+                    import traceback
+                    catat(traceback.format_exc())
     except OSError:
         pass
     finally:
@@ -283,6 +288,12 @@ def tangani(p: Pengguna, data: dict) -> None:
                      "pesan": f"nama '{nama}' sudah dipakai laptop lain. "
                               f"Pilih nama lain."})
             catat(f"  [!] {p.ip} memakai nama '{nama}' yang sudah dipakai")
+            # Tutup koneksi dengan bersih supaya client tidak dapat WinError 10054
+            try:
+                p.koneksi.shutdown(socket.SHUT_RDWR)
+                p.koneksi.close()
+            except OSError:
+                pass
             return
 
         p.nama = nama
